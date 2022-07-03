@@ -1,19 +1,28 @@
 use pcap::Device;
+use crate::Error::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::init;
 
-    #[test]
-    fn test_init() {
-        init();
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
 }
 
-fn init() -> Result<(), pcap::Error> {
-    let list = Device::list()?;
-    println!("{:?}", list.iter().map(|x|x.name.clone()).collect::<Vec<String>>());
-    Ok(())
+pub enum Error {
+    GenericErr,
+    NoSuchDevice,
+}
+
+pub fn init(dev_name : &str) -> Result<(), Error> {
+
+    let list = Device::list();
+    if list.is_err() {
+        return Err(GenericErr);
+    }
+
+    for dev in list.unwrap() {
+        if dev.name == dev_name {
+            return Ok(())
+        }
+    }
+
+    Err(NoSuchDevice)
 }
