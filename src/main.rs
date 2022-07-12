@@ -2,11 +2,13 @@ use apmf_sniffer::*;
 
 fn main() {
 
-    if let Err(_e) = init("bluetooth0") {
+    let sniffer = init("bluetooth0");
+
+    if  sniffer.is_err(){
         println!("No such device");
     }
     else {
-        println!("Using device ***");
+        println!("Using sniffer: {:?}", sniffer.unwrap());
     }
 
 
