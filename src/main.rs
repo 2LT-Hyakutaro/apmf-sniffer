@@ -8,7 +8,7 @@ fn main() {
         println!("No such device");
     }
     else {
-        println!("Using sniffer: {:?}", r.as_ref().unwrap());
+        println!("Using sniffer: {:?}", r.as_ref().unwrap().device);
     }
 
     let mut sniffer = r.unwrap();

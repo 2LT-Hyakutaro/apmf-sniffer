@@ -1,6 +1,6 @@
-use pcap::Device;
+use pcap::{Capture, Device, Active};
 use crate::Error::*;
-use crate::Status::{Active, Initialized, Paused, Uninitialized};
+use crate::Status::{Sniffing, Initialized, Paused};
 
 #[cfg(test)]
 mod tests {
@@ -18,34 +18,46 @@ pub enum Error {
 pub enum Status {
     Uninitialized,
     Initialized,
-    Active,
+    Sniffing,
     Paused
 }
 
-#[derive(Debug)]
+
 pub struct APMFSniffer {
-    device : String,
-    status : Status,
-    output : String,            // will need to be changed
+    pub device : Device,
+    pub capture : Option<Capture<Active>>,
+    pub status : Status,
+    pub output : String,            // will need to be changed
 }
 
 impl APMFSniffer {
 
-    fn new(device : String, status : Status, output : String) -> Self {
-        APMFSniffer{device, status, output}
+    fn new(device : Device, status : Status, output : String) -> Self {
+        APMFSniffer{device, capture : None, status, output}
     }
 
     pub fn start(&mut self) -> Result<(), Error> {
-        return if self.status == Initialized {
-            self.status = Active;
-            Ok(())
-        } else {
-            Err(IllegalAction)
+
+        if self.status != Initialized {
+            return Err(IllegalAction);
         }
+
+        let res_cap = Capture::from_device(self.device.name.as_str());
+
+        if res_cap.is_err() {
+            return Err(GenericErr);             // could use an error message
+        }
+
+        let cap = res_cap.unwrap();
+        cap.promisc(true);
+
+        self.status = Sniffing;
+
+        return Ok(());
     }
 
     pub fn pause(&mut self) -> Result<(), Error> {
-        return if self.status == Active {
+        return if self.status == Sniffing {
             self.status = Paused;
             Ok(())
         } else {
@@ -62,7 +74,7 @@ pub fn init(dev_name : &str) -> Result<APMFSniffer, Error> {
 
     for dev in list.unwrap() {
         if dev.name == dev_name {
-            return Ok(APMFSniffer::new(dev.name, Initialized, "stdout?".to_string()))
+            return Ok(APMFSniffer::new(dev, Initialized, "stdout?".to_string()))
         }
     }
 
