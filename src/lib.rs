@@ -80,3 +80,11 @@ pub fn init(dev_name : &str) -> Result<APMFSniffer, Error> {
 
     Err(NoSuchDevice)
 }
+
+pub fn list_devices() -> Result<Vec<String>, Error> {
+    let list = Device::list();
+    if list.is_err() {
+        return Err(GenericErr);
+    }
+    return Ok(list.unwrap().into_iter().map(|d| d.name).collect());
+}
