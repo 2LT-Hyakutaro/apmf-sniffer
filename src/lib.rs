@@ -77,7 +77,16 @@ impl APMFSniffer {
         let r = self.capture.as_mut().unwrap().next();
         if r.is_err() { return Err(GenericErr)};
 
-        println!("{:?}", r.unwrap().header);
+        /* let's try to show an IP packet */
+        let packet = r.unwrap().data;
+        if packet.len() >= 12 {
+            let dest = &packet[0..6];
+            let src = &packet[6..12];
+            println!("len: {}", packet.len());
+            println!("\tsrc: {:x}.{:x}.{:x}.{:x}.{:x}.{:x}", src[0], src[1], src[2], src[3], src[4], src[5]);
+            println!("\tdest: {:x}.{:x}.{:x}.{:x}.{:x}.{:x}", dest[0], dest[1], dest[2], dest[3], dest[4], dest[5]);
+        }
+
         Ok(())
     }
 }
