@@ -12,6 +12,7 @@ pub enum Error {
     GenericErr,
     NoSuchDevice,
     IllegalAction,              /* returned when a method is called when in the wrong state (e.g. start() when already active) */
+    RustPcapError(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -45,11 +46,17 @@ impl APMFSniffer {
         let res_cap = Capture::from_device(self.device.name.as_str());
 
         if res_cap.is_err() {
-            return Err(GenericErr);             // could use an error message
+            return Err(RustPcapError(format!("{:?}", res_cap.err().unwrap())));
         }
 
-        let cap = res_cap.unwrap();
-        cap.promisc(true);
+        let res_active = res_cap.unwrap().promisc(true)
+            .immediate_mode(true)               // packets are picked up immediately (no buffering)
+            //cap.rfmon(true);                                      // might be important for wlan
+            .open();
+
+        if res_active.is_err() { return Err(RustPcapError(format!("{:?}", res_active.err().unwrap()))); }
+
+        self.capture = Some(res_active.unwrap());
 
         self.status = Sniffing;
 
@@ -63,6 +70,15 @@ impl APMFSniffer {
         } else {
             Err(IllegalAction)
         }
+    }
+
+    pub fn gib(&mut self) -> Result<(), Error> {
+
+        let r = self.capture.as_mut().unwrap().next();
+        if r.is_err() { return Err(GenericErr)};
+
+        println!("{:?}", r.unwrap().header);
+        Ok(())
     }
 }
 pub fn init(dev_name : &str) -> Result<APMFSniffer, Error> {

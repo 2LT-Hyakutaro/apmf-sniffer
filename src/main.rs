@@ -31,6 +31,7 @@ fn main() {
                 return;
             }
             println!("{:?}", list.unwrap());
+            return;
         },
         Args{ list: false, capture: true, dev_name:Some(dev) } => {
             let d = init(dev.as_str());
@@ -47,24 +48,13 @@ fn main() {
             }
             println!("Started capture on dev {}", dev)
         },
-        _ => println!("Invalid combination of parameters")
+        _ => {
+            println!("Invalid combination of parameters");
+            return;
+        }
     }
 
-    /*
-        let r = init("bluetooth0");
+    while device.gib().is_ok() {}
+    println!("gib() returned with error");
 
-        if  r.is_err(){
-            println!("No such device");
-        }
-        else {
-            println!("Using sniffer: {:?}", r.as_ref().unwrap().device);
-        }
-
-        let mut sniffer = r.unwrap();
-
-        sniffer.start().expect("first start should not panic");
-        sniffer.start().expect_err("second start should not be ok");
-        sniffer.pause().expect("first pause should not panic");
-        sniffer.pause().expect_err("second pause should not be ok");
-    */
 }
