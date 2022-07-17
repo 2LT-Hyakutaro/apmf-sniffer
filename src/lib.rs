@@ -79,12 +79,21 @@ impl APMFSniffer {
 
         /* let's try to show an IP packet */
         let packet = r.unwrap().data;
-        if packet.len() >= 12 {
-            let dest = &packet[0..6];
-            let src = &packet[6..12];
-            println!("len: {}", packet.len());
-            println!("\tsrc: {:x}.{:x}.{:x}.{:x}.{:x}.{:x}", src[0], src[1], src[2], src[3], src[4], src[5]);
-            println!("\tdest: {:x}.{:x}.{:x}.{:x}.{:x}.{:x}", dest[0], dest[1], dest[2], dest[3], dest[4], dest[5]);
+        if packet.len() >= 34 {
+            let mac_dest = &packet[0..6];
+            let mac_src = &packet[6..12];
+            let ether_type = &packet[12..14];
+
+            if ether_type[0] == 0x08 && ether_type[1] == 0{
+                let ip_src = &packet[26..30];
+                let ip_dest = &packet[30..34];
+
+                println!("len: {}", packet.len());
+                println!("\tMAC src: {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", mac_src[0], mac_src[1], mac_src[2], mac_src[3], mac_src[4], mac_src[5]);
+                println!("\tMAC dest: {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", mac_dest[0], mac_dest[1], mac_dest[2], mac_dest[3], mac_dest[4], mac_dest[5]);
+                println!("\tIP src: {}.{}.{}.{}", ip_src[0], ip_src[1], ip_src[2], ip_src[3]);
+                println!("\tIP dest: {}.{}.{}.{}", ip_dest[0], ip_dest[1], ip_dest[2], ip_dest[3]);
+            }
         }
 
         Ok(())
