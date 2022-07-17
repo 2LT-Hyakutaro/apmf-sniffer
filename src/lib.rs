@@ -29,12 +29,13 @@ pub struct APMFSniffer {
     pub capture : Option<Capture<Active>>,
     pub status : Status,
     pub output : String,            // will need to be changed
+    pub filter : String,
 }
 
 impl APMFSniffer {
 
-    fn new(device : Device, status : Status, output : String) -> Self {
-        APMFSniffer{device, capture : None, status, output}
+    fn new(device : Device, status : Status, output : String, bpf : &str) -> Self {
+        APMFSniffer{device, capture : None, status, output, filter : bpf.to_string()}
     }
 
     pub fn start(&mut self) -> Result<(), Error> {
@@ -57,6 +58,9 @@ impl APMFSniffer {
         if res_active.is_err() { return Err(RustPcapError(format!("{:?}", res_active.err().unwrap()))); }
 
         self.capture = Some(res_active.unwrap());
+        let res_f = self.capture.as_mut().unwrap().filter(self.filter.as_str(), false);
+
+        if res_f.is_err() {return Err(GenericErr)}
 
         self.status = Sniffing;
 
@@ -99,7 +103,8 @@ impl APMFSniffer {
         Ok(())
     }
 }
-pub fn init(dev_name : &str) -> Result<APMFSniffer, Error> {
+
+pub fn init(dev_name : &str, bpf : &str) -> Result<APMFSniffer, Error> {
 
     let list = Device::list();
     if list.is_err() {
@@ -108,7 +113,7 @@ pub fn init(dev_name : &str) -> Result<APMFSniffer, Error> {
 
     for dev in list.unwrap() {
         if dev.name == dev_name {
-            return Ok(APMFSniffer::new(dev, Initialized, "stdout?".to_string()))
+            return Ok(APMFSniffer::new(dev, Initialized, "stdout?".to_string(), bpf))
         }
     }
 

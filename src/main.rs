@@ -34,7 +34,7 @@ fn main() {
             return;
         },
         Args{ list: false, capture: true, dev_name:Some(dev) } => {
-            let d = init(dev.as_str());
+            let d = init(dev.as_str(), "");
             if d.is_err() {
                 println!("Could not initialize device {}", dev);
                 return;
