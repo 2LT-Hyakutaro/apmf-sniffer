@@ -12,9 +12,14 @@ pub enum Error {
     GenericErr,
     NoSuchDevice,
     IllegalAction,              /* returned when a method is called when in the wrong state (e.g. start() when already active) */
-    RustPcapError(String),
+    RustPcapError(pcap::Error),
 }
 
+impl From<pcap::Error> for Error {
+    fn from(e: pcap::Error) -> Self {
+        RustPcapError(e)
+    }
+}
 #[derive(Debug, PartialEq)]
 pub enum Status {
     Uninitialized,
@@ -44,20 +49,14 @@ impl APMFSniffer {
             return Err(IllegalAction);
         }
 
-        let res_cap = Capture::from_device(self.device.name.as_str());
+        let res_cap = Capture::from_device(self.device.name.as_str())?;
 
-        if res_cap.is_err() {
-            return Err(RustPcapError(format!("{:?}", res_cap.err().unwrap())));
-        }
-
-        let res_active = res_cap.unwrap().promisc(true)
+        let res_active = res_cap.promisc(true)
             .immediate_mode(true)               // packets are picked up immediately (no buffering)
             //cap.rfmon(true);                                      // might be important for wlan
-            .open();
+            .open()?;
 
-        if res_active.is_err() { return Err(RustPcapError(format!("{:?}", res_active.err().unwrap()))); }
-
-        self.capture = Some(res_active.unwrap());
+        self.capture = Some(res_active);
         let res_f = self.capture.as_mut().unwrap().filter(self.filter.as_str(), false);
 
         if res_f.is_err() {return Err(GenericErr)}
@@ -106,22 +105,21 @@ impl APMFSniffer {
 
 pub fn init(dev_name : &str, bpf : &str) -> Result<APMFSniffer, Error> {
 
-    let list = Device::list();
-    if list.is_err() {
-        return Err(GenericErr);
-    }
+    let list = Device::list()?;        // can return MalformedError, PcapError, InvalidString
 
-    for dev in list.unwrap() {
+
+    for dev in list {
         if dev.name == dev_name {
             return Ok(APMFSniffer::new(dev, Initialized, "stdout?".to_string(), bpf))
         }
     }
 
+
     Err(NoSuchDevice)
 }
 
 pub fn list_devices() -> Result<Vec<String>, Error> {
-    let list = Device::list();
+    let list = Device::list();      // can return MalformedError, PcapError, InvalidString
     if list.is_err() {
         return Err(GenericErr);
     }

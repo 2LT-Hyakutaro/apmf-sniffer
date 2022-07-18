@@ -17,7 +17,7 @@ struct Args {
     #[clap(short, long = "dev", value_parser)]
     dev_name: Option<String>,
 
-    /// BFP string for capture filter
+    /// BPF string for capture filter
     #[clap(short, long, value_parser, default_value = "")]
     filter: String,
 }
