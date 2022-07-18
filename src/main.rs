@@ -59,7 +59,7 @@ fn main() {
         }
     }
 
-    while device.gib().is_ok() {}
-    println!("gib() returned with error");
-
+    //while device.gib().is_ok() {}
+    //println!("gib() returned with error");
+    loop{}
 }
