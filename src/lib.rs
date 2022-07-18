@@ -50,13 +50,9 @@ impl APMFSniffer {
             return Err(IllegalAction);
         }
 
-        let res_cap = Capture::from_device(self.device.name.as_str());
+        let res_cap = Capture::from_device(self.device.name.as_str())?;
 
-        if res_cap.is_err() {
-            return Err(RustPcapError(format!("{:?}", res_cap.err().unwrap())));
-        }
-
-        let active_cap = self.activate_capture(res_cap.unwrap())?;
+        let active_cap = self.activate_capture(res_cap)?;
         self.status = Sniffing;
 
         Self::start_capture_thread(active_cap);
@@ -104,16 +100,12 @@ impl APMFSniffer {
         let mut res_active = cap.promisc(true)
             .immediate_mode(true)               // packets are picked up immediately (no buffering)
             //cap.rfmon(true);                                      // might be important for wlan
-            .open();
+            .open()?;
 
-        if res_active.is_err() {
-            return Err(RustPcapError(format!("{:?}", res_active.err().unwrap())));
-        }
-
-        let res_f = res_active.as_mut().unwrap().filter(self.filter.as_str(), false);
+        let res_f = res_active.filter(self.filter.as_str(), false);
         if res_f.is_err() {return Err(GenericErr)}
 
-        Ok(res_active.unwrap())
+        Ok(res_active)
     }
 
     fn start_capture_thread(mut cap: Capture<Active>) {
