@@ -57,9 +57,7 @@ impl APMFSniffer {
             .open()?;
 
         self.capture = Some(res_active);
-        let res_f = self.capture.as_mut().unwrap().filter(self.filter.as_str(), false);
-
-        if res_f.is_err() {return Err(GenericErr)}
+        self.capture.as_mut().unwrap().filter(self.filter.as_str(), false)?;
 
         self.status = Sniffing;
 
