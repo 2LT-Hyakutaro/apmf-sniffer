@@ -71,11 +71,10 @@ impl APMFSniffer {
 
     pub fn gib(&mut self) -> Result<(), Error> {
 
-        let r = self.capture.as_mut().unwrap().next();
-        if r.is_err() { return Err(GenericErr)};
+        let r = self.capture.as_mut().unwrap().next()?;
 
         /* let's try to show an IP packet */
-        let packet = r.unwrap().data;
+        let packet = r.data;
         if packet.len() >= 34 {
             let mac_dest = &packet[0..6];
             let mac_src = &packet[6..12];
@@ -96,16 +95,17 @@ impl APMFSniffer {
         Ok(())
     }
 
+    /// # Errors
+    /// * `RustPcapError` if [`open()`] fails, or if the BPF string provided was incorrect.
     fn activate_capture(&self, cap: Capture<Inactive>) -> Result<Capture<Active>, Error> {
-        let mut res_active = cap.promisc(true)
+        let mut capture = cap.promisc(true)
             .immediate_mode(true)               // packets are picked up immediately (no buffering)
             //cap.rfmon(true);                                      // might be important for wlan
             .open()?;
 
-        let res_f = res_active.filter(self.filter.as_str(), false);
-        if res_f.is_err() {return Err(GenericErr)}
+        capture.filter(self.filter.as_str(), false)?;
 
-        Ok(res_active)
+        Ok(capture)
     }
 
     fn start_capture_thread(mut cap: Capture<Active>) {
@@ -162,9 +162,6 @@ pub fn init(dev_name : &str, bpf : &str) -> Result<APMFSniffer, Error> {
 }
 
 pub fn list_devices() -> Result<Vec<String>, Error> {
-    let list = Device::list();      // can return MalformedError, PcapError, InvalidString
-    if list.is_err() {
-        return Err(GenericErr);
-    }
-    return Ok(list.unwrap().into_iter().map(|d| d.name).collect());
+    let list = Device::list()?;      // can return MalformedError, PcapError, InvalidString
+    return Ok(list.into_iter().map(|d| d.name).collect());
 }
