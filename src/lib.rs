@@ -142,17 +142,21 @@ impl APMFSniffer {
     }
 }
 
+/// Returns a new [`APMFSniffer`] that will listen in promiscuous mode on the interface `dev_name`;
+/// only packets that match the BPF program string `bpf` are picked up.
+/// `""` is a valid filter that matches all packets.
+/// # Errors
+/// * [`RustPcapError`] if [`Device::list()`] fails.
+/// * [`NoSuchDevice`] if the provided name does not match any device name.
 pub fn init(dev_name : &str, bpf : &str) -> Result<APMFSniffer, Error> {
 
     let list = Device::list()?;        // can return MalformedError, PcapError, InvalidString
-
 
     for dev in list {
         if dev.name == dev_name {
             return Ok(APMFSniffer::new(dev, Initialized, "stdout?".to_string(), bpf))
         }
     }
-
 
     Err(NoSuchDevice)
 }
