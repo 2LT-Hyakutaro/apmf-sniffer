@@ -59,5 +59,12 @@ fn main() {
         }
     }
 
-    loop{}
+    loop{
+        let line = std::io::stdin().lines().next().unwrap().unwrap();
+        match line.as_str() {
+            "pause" => device.pause().unwrap(),
+            "force_exit" => return,
+            _ => println!("Invalid command")
+        }
+    }
 }

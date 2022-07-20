@@ -1,3 +1,4 @@
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread;
 use pcap::{Capture, Device, Active, Inactive};
 use crate::Error::*;
@@ -34,18 +35,25 @@ pub enum Status {
     Paused
 }
 
+#[derive(PartialEq, Eq)]
+enum Command {
+    Stop,
+    Pause
+}
+
 
 pub struct APMFSniffer {
     pub device : Device,
     pub capture : Option<Capture<Active>>,
     pub status : Status,
     pub output : String,            // will need to be changed
+    sender: Option<Sender<Command>>
 }
 
 impl APMFSniffer {
 
     fn new(device : Device, status : Status, output : String) -> Self {
-        APMFSniffer{device, capture : None, status, output}
+        APMFSniffer{device, capture : None, status, output, sender: None}
     }
 
     /// # Errors
@@ -60,7 +68,7 @@ impl APMFSniffer {
         let res_cap = Capture::from_device(self.device.name.as_str())?;
         let active_cap = self.activate_capture(res_cap, f)?;
         self.status = Sniffing;
-        Self::start_capture_thread(active_cap);
+        self.start_capture_thread(active_cap);
 
         Ok(())
     }
@@ -68,6 +76,10 @@ impl APMFSniffer {
     pub fn pause(&mut self) -> Result<(), Error> {
         return if self.status == Sniffing {
             self.status = Paused;
+            let res = self.sender.as_ref().unwrap().send(Command::Pause);
+            if res.is_err() {
+                return Err(Error::GenericErr) // maybe change to not generic error depending on the error?
+            }
             Ok(())
         } else {
             Err(IllegalAction)
@@ -85,9 +97,28 @@ impl APMFSniffer {
         Ok(capture)
     }
 
-    fn start_capture_thread(mut cap: Capture<Active>) {
+    fn start_capture_thread(&mut self, mut cap: Capture<Active>) {
+        let (sender, receiver): (Sender<Command>, Receiver<Command>) = channel();
+        self.sender = Some(sender);
         thread::spawn(move || {
-            while gib_test(&mut cap).is_ok() {}
+            while gib_test(&mut cap).is_ok() { // this should make the thread automatically stop if the sender disconnects
+                let res = receiver.try_recv();
+                if res.is_err() {
+                    if res.err().unwrap() == TryRecvError::Empty {
+                        continue
+                    }
+                    return;
+                }
+                let mut command = res.unwrap();
+                loop {
+                    match command {
+                        Command::Stop => return,
+                        Command::Pause => {
+                            command = receiver.recv().unwrap();
+                        }
+                    }
+                }
+            }
         });
     }
 }
