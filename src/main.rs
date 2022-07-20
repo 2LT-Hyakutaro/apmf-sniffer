@@ -38,7 +38,7 @@ fn main() {
             return;
         },
         Args{ list: false, capture: true, dev_name:Some(dev), filter: f } => {
-            let d = init(dev.as_str(), f.as_str());
+            let d = init(dev.as_str());
             if d.is_err() {
                 println!("Could not initialize device {}: Error {:?}", dev, d.err().unwrap());
                 return;
@@ -46,7 +46,7 @@ fn main() {
             device = d.unwrap();
             println!("Initialized device {}", dev);
 
-            let res = device.start();
+            let res = device.start(f.as_str());
             if res.is_err() {
                 println!("Could not start capture on device {}: Error {:?}", dev, res.err().unwrap());
                 return;
@@ -59,7 +59,5 @@ fn main() {
         }
     }
 
-    //while device.gib().is_ok() {}
-    //println!("gib() returned with error");
     loop{}
 }
