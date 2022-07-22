@@ -17,7 +17,9 @@ pub enum Error {
     IllegalAction,              /* returned when a method is called when in the wrong state (e.g. start() when already active) */
     RustPcapError(pcap::Error),
     FilterError(String),
-    ParsingError(etherparse::ReadError)
+    ParsingError(etherparse::ReadError),
+    DisconnectedThread,
+    InternalError
 }
 
 impl From<pcap::Error> for Error {
@@ -85,13 +87,13 @@ impl APMFSniffer {
     pub fn resume(&mut self) -> Result<(), Error> {
         if self.status != Paused { return Err(IllegalAction); }
         if self.sender.is_none() {
-            return Err(GenericErr); // this should never happen
+            return Err(InternalError); // this should never happen!
         }
         let res = self.sender.as_ref().unwrap().send(Command::Resume);
         if res.is_err() {
             // TODO: decide what happens in this case, the receiver is disconnected,
             // should a new thread be started or should we return an error?
-            return Err(GenericErr);
+            return Err(DisconnectedThread);
         }
 
 
@@ -104,7 +106,7 @@ impl APMFSniffer {
             self.status = Paused;
             let res = self.sender.as_ref().unwrap().send(Command::Pause);
             if res.is_err() {
-                return Err(Error::GenericErr) // maybe change to not generic error depending on the error?
+                return Err(Error::DisconnectedThread) // maybe change to not generic error depending on the error?
             }
             Ok(())
         } else {
@@ -220,6 +222,10 @@ fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {
 
 
     Ok(())
+}
+
+struct APMFPacket {
+    src_addr:
 }
 
 
