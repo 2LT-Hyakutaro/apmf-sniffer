@@ -12,7 +12,6 @@ mod tests {
 
 #[derive(Debug)]                // required for .unwrap()
 pub enum Error {
-    GenericErr,
     NoSuchDevice,
     IllegalAction,              /* returned when a method is called when in the wrong state (e.g. start() when already active) */
     RustPcapError(pcap::Error),
