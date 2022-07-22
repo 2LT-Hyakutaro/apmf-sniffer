@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread;
 use etherparse::{InternetSlice, ReadError, SlicedPacket, TransportSlice};
@@ -195,37 +197,79 @@ fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {
     /* let's try to show an IP packet */
     let packet = p.data;
 
-    println!("len: {}", packet.len());
+    // println!("len: {}", packet.len());
     let net_and_transport = SlicedPacket::from_ethernet(&packet)?;
+    let src_addr;
+    let dest_addr;
+    let src_port;
+    let dest_port;
+    let protocol: &str;
     match net_and_transport.ip {
         Some(InternetSlice::Ipv4(ip, ..)) => {
-            println!("\tsrc addr: {}", ip.source_addr());
-            println!("\tdst addr: {}", ip.destination_addr());
+            src_addr = IpAddr::from(ip.source_addr());
+            dest_addr = IpAddr::from(ip.destination_addr());
+            // println!("\tsrc addr: {}", ip.source_addr());
+            // println!("\tdst addr: {}", ip.destination_addr());
         },
         Some(InternetSlice::Ipv6(ip, ..)) => {
-            println!("\tsrc addr: {}", ip.source_addr());
-            println!("\tdst addr: {}", ip.destination_addr());
+            src_addr = IpAddr::from(ip.source_addr());
+            dest_addr = IpAddr::from(ip.destination_addr());
+            // println!("\tsrc addr: {}", ip.source_addr());
+            // println!("\tdst addr: {}", ip.destination_addr());
         },
-        _ => {}
+        _ => {
+            src_addr = IpAddr::from_str("0.0.0.0").unwrap(); // TODO: change!!
+            dest_addr = IpAddr::from_str("0.0.0.0").unwrap(); // TODO: change!!
+
+        }
     }
     match net_and_transport.transport {
         Some(TransportSlice::Udp(udp)) => {
-            println!("\t src port: {}", udp.source_port());
-            println!("\t dst port: {}", udp.destination_port());
+            src_port = udp.source_port();
+            dest_port = udp.destination_port();
+            protocol = "udp";
+            // println!("\t src port: {}", udp.source_port());
+            // println!("\t dst port: {}", udp.destination_port());
         },
         Some(TransportSlice::Tcp(tcp)) => {
-            println!("\t src port: {}", tcp.source_port());
-            println!("\t dst port: {}", tcp.destination_port());
+            src_port = tcp.source_port();
+            dest_port = tcp.destination_port();
+            protocol = "tcp"
+            // println!("\t src port: {}", tcp.source_port());
+            // println!("\t dst port: {}", tcp.destination_port());
         },
-        _ => {}
+        _ => {
+            src_port = 0; // TODO: change!!
+            dest_port = 0; // TODO: change!!
+            protocol = "unknown"
+        }
     }
+
+    let apacket = APMFPacket {
+        src_addr,
+        dest_addr,
+        src_port,
+        dest_port,
+        timestamp: ((p.header.ts.tv_sec as u128) << 64) + (p.header.ts.tv_usec as u128), // should mathematically be impossible to have overflow
+        n_bytes: p.header.len,
+        protocol
+    };
+
+    println!("{:?}", apacket);
 
 
     Ok(())
 }
 
+#[derive(Debug)]
 struct APMFPacket {
-    src_addr:
+    src_addr: IpAddr,
+    dest_addr: IpAddr,
+    src_port: u16,
+    dest_port: u16,
+    timestamp: u128, // nanoseconds
+    n_bytes: u32,
+    protocol: &'static str
 }
 
 
