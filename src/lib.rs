@@ -1,5 +1,6 @@
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread;
+use etherparse::{InternetSlice, ReadError, SlicedPacket, TransportSlice};
 use pcap::{Capture, Device, Active, Inactive};
 use crate::Error::*;
 use crate::Status::{Sniffing, Initialized, Paused};
@@ -16,6 +17,7 @@ pub enum Error {
     IllegalAction,              /* returned when a method is called when in the wrong state (e.g. start() when already active) */
     RustPcapError(pcap::Error),
     FilterError(String),
+    ParsingError(etherparse::ReadError)
 }
 
 impl From<pcap::Error> for Error {
@@ -25,6 +27,12 @@ impl From<pcap::Error> for Error {
         } else {
             RustPcapError(e)
         }
+    }
+}
+
+impl From<ReadError> for Error {
+    fn from(e: ReadError) -> Self {
+        ParsingError(e)
     }
 }
 #[derive(Debug, PartialEq)]
@@ -180,25 +188,37 @@ pub fn list_devices() -> Result<Vec<String>, Error> {
 
 fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {
 
-    let r = cap.next();
-    if r.is_err() { return Err(GenericErr)};
+    let p = cap.next()?;
 
     /* let's try to show an IP packet */
-    let packet = r.unwrap().data;
-    if packet.len() >= 34 {
-        let mac_dest = &packet[0..6];
-        let mac_src = &packet[6..12];
-        let ether_type = &packet[12..14];
-        if ether_type[0] == 0x08 && ether_type[1] == 0{
-            let ip_src = &packet[26..30];
-            let ip_dest = &packet[30..34];
-            println!("len: {}", packet.len());
-            println!("\tMAC src: {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", mac_src[0], mac_src[1], mac_src[2], mac_src[3], mac_src[4], mac_src[5]);
-            println!("\tMAC dest: {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", mac_dest[0], mac_dest[1], mac_dest[2], mac_dest[3], mac_dest[4], mac_dest[5]);
-            println!("\tIP src: {}.{}.{}.{}", ip_src[0], ip_src[1], ip_src[2], ip_src[3]);
-            println!("\tIP dest: {}.{}.{}.{}", ip_dest[0], ip_dest[1], ip_dest[2], ip_dest[3]);
-        }
+    let packet = p.data;
+
+    println!("len: {}", packet.len());
+    let net_and_transport = SlicedPacket::from_ethernet(&packet)?;
+    match net_and_transport.ip {
+        Some(InternetSlice::Ipv4(ip, ..)) => {
+            println!("\tsrc addr: {}", ip.source_addr());
+            println!("\tdst addr: {}", ip.destination_addr());
+        },
+        Some(InternetSlice::Ipv6(ip, ..)) => {
+            println!("\tsrc addr: {}", ip.source_addr());
+            println!("\tdst addr: {}", ip.destination_addr());
+        },
+        _ => {}
     }
+    match net_and_transport.transport {
+        Some(TransportSlice::Udp(udp)) => {
+            println!("\t src port: {}", udp.source_port());
+            println!("\t dst port: {}", udp.destination_port());
+        },
+        Some(TransportSlice::Tcp(tcp)) => {
+            println!("\t src port: {}", tcp.source_port());
+            println!("\t dst port: {}", tcp.destination_port());
+        },
+        _ => {}
+    }
+
+
     Ok(())
 }
 
