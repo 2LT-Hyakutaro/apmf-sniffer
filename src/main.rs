@@ -63,7 +63,11 @@ fn main() {
         let line = std::io::stdin().lines().next().unwrap().unwrap();
         match line.as_str() {
             "pause" => device.pause().unwrap(),
-            "force_exit" => return,
+            "resume" => device.resume().unwrap(),
+            "force_exit" => {
+                drop(device);
+                return
+            },
             _ => println!("Invalid command")
         }
     }

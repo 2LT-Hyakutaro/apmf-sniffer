@@ -38,7 +38,8 @@ pub enum Status {
 #[derive(PartialEq, Eq)]
 enum Command {
     Stop,
-    Pause
+    Pause,
+    Resume
 }
 
 
@@ -72,6 +73,23 @@ impl APMFSniffer {
 
         Ok(())
     }
+
+    pub fn resume(&mut self) -> Result<(), Error> {
+        if self.status != Paused { return Err(IllegalAction); }
+        if self.sender.is_none() {
+            return Err(GenericErr); // this should never happen
+        }
+        let res = self.sender.as_ref().unwrap().send(Command::Resume);
+        if res.is_err() {
+            // TODO: decide what happens in this case, the receiver is disconnected,
+            // should a new thread be started or should we return an error?
+            return Err(GenericErr);
+        }
+
+
+        Ok(())
+    }
+
 
     pub fn pause(&mut self) -> Result<(), Error> {
         return if self.status == Sniffing {
@@ -116,12 +134,25 @@ impl APMFSniffer {
                         Command::Pause => {
                             command = receiver.recv().unwrap();
                         }
+                        Command::Resume => break
                     }
                 }
             }
         });
     }
 }
+
+impl Drop for APMFSniffer {
+    fn drop(&mut self) {
+        if self.sender.is_none() {
+            return;
+        }
+        self.sender.as_ref().unwrap().send(Command::Stop);
+        // It is fine to ignore the error, because in that
+        // case the thread should already have been stopped
+    }
+}
+
 
 /// Returns a new [`APMFSniffer`] that will listen in promiscuous mode on the interface `dev_name`;
 /// only packets that match the BPF program string `bpf` are picked up.
