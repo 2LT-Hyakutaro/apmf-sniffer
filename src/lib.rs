@@ -7,6 +7,8 @@ use pcap::{Capture, Device, Active, Inactive};
 use crate::Error::*;
 use crate::Status::{Sniffing, Initialized, Paused};
 
+mod report;
+
 #[cfg(test)]
 mod tests {
 
@@ -158,7 +160,7 @@ impl Drop for APMFSniffer {
         if self.sender.is_none() {
             return;
         }
-        self.sender.as_ref().unwrap().send(Command::Stop);
+        self.sender.as_ref().unwrap().send(Command::Stop).unwrap_or(());
         // It is fine to ignore the error, because in that
         // case the thread should already have been stopped
     }
