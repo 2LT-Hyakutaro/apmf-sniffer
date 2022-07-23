@@ -18,8 +18,16 @@ struct Args {
     dev_name: Option<String>,
 
     /// BPF string for capture filter
-    #[clap(short, long, value_parser, default_value = "")]
+    #[clap(long, value_parser, default_value = "")]
     filter: String,
+
+    /// File to write the report on
+    #[clap(short, long, value_parser)]
+    file_name: Option<String>,
+
+    /// Time after which a new report is generated in seconds
+    #[clap(short, long, value_parser)]
+    time: Option<u32>,
 }
 
 fn main() {
@@ -28,7 +36,7 @@ fn main() {
     let mut device;
 
     match args {
-        Args{ list: true, capture: false, dev_name:None, filter: a } if a.as_str() == "" => {
+        Args{ list: true, capture: false, dev_name:None, filter: a, file_name: None, time: None } if a.as_str() == "" => {
             let list = list_devices();
             if list.is_err() {
                 println!("Could not get list of available devices: Error {:?}", list.err().unwrap());
@@ -37,7 +45,8 @@ fn main() {
             println!("{:?}", list.unwrap());
             return;
         },
-        Args{ list: false, capture: true, dev_name:Some(dev), filter: f } => {
+        Args{ list: false, capture: true, dev_name:Some(dev), filter: f, file_name: Some(file_name), time: Some(delta_t)  } => {
+            // TODO: use file_name and delta_t
             let d = init(dev.as_str());
             if d.is_err() {
                 println!("Could not initialize device {}: Error {:?}", dev, d.err().unwrap());
@@ -53,6 +62,22 @@ fn main() {
             }
             println!("Started capture on dev {}", dev)
         },
+        Args{ list: false, capture: true, dev_name:None, filter: _, file_name: _, time: _  } => {
+            println!("Error: Supply a device name");
+            return;
+        },
+        Args{ list: false, capture: true, dev_name:_, filter: _, file_name: None, time: _  } => {
+            println!("Error: Supply a file name");
+            return;
+        }
+        Args{ list: false, capture: true, dev_name:_, filter: _, file_name: _, time: None  } => {
+            println!("Error: Supply a time interval");
+            return;
+        }
+        Args{ list: true, capture: true, dev_name:_, filter: _, file_name: _, time: _  } => {
+            println!("Error: list and capture flag are mutually exclusive");
+            return;
+        }
         _ => {
             println!("Invalid combination of parameters");
             return;
