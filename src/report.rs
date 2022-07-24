@@ -1,5 +1,5 @@
 use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::net::IpAddr;
 use crate::{APMFPacket, Port};
@@ -19,8 +19,8 @@ struct ReportInfo {
     start_time: u128,
     stop_time: u128,
     n_bytes: u32,
-    trans_protocols: Vec<&'static str>,
-    app_protocols: Vec<Port>
+    trans_protocols: HashSet<&'static str>,
+    app_protocols: Vec<Port> // need to change to HashSet as well (as we currently get the protocol, the protocol will be just one)
 }
 
 impl Report {
@@ -44,9 +44,9 @@ impl Report {
                 start_time: p.timestamp,
                 stop_time: p.timestamp,
                 n_bytes: p.n_bytes,
-                trans_protocols: vec![p.protocol],
+                trans_protocols: HashSet::from([p.protocol]),
                 app_protocols: vec![p.application]
-            })
+            });
         }
     }
 }
@@ -55,16 +55,17 @@ impl Display for Report {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "src address\tsrc port\tdest address\tdest port\ttime first packet\ttime last packet\tnumber of bytes\ttransport protocol\tapplication protocol\n")?;
         for (header, info) in self.report.iter() {
+            let trans_p = info.trans_protocols.iter().collect::<Vec<&str>>().join(", ");
             let app_p = info.app_protocols.iter().map(|p| format!("{:?}", p)).collect::<Vec<String>>().join(", ");
             write!(f, "{}\t{}\t{}\t{}\t", header.src_addr, header.src_port, header.dest_addr, header.dest_port)?;
-            write!(f, "{}\t{}\t{}\t{}\t{}\n", info.start_time, info.stop_time, info.n_bytes, info.trans_protocols.join(", "), app_p)?;
+            write!(f, "{}\t{}\t{}\t{}\t{}\n", info.start_time, info.stop_time, info.n_bytes, trans_p, app_p)?;
         }
 
         Ok(())
     }
 }
 
-fn generate_report(packets: Vec<APMFPacket>) -> Report {
+pub fn generate_report(packets: Vec<APMFPacket>) -> Report {
     let mut report = Report {
         report: HashMap::new()
     };
