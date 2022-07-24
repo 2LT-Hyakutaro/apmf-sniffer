@@ -1,15 +1,21 @@
 use std::net::IpAddr;
-use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread;
 use etherparse::{InternetSlice, ReadError, SlicedPacket, TransportSlice};
 use pcap::{Capture, Device, Active, Inactive};
 use crate::Error::*;
+use crate::Port::{Tcp, Udp, Unknown};
+use crate::ports::{Port, TcpPort, UdpPort};
 use crate::Status::{Sniffing, Initialized, Paused};
 
 #[cfg(test)]
 mod tests {
+    use crate::ports::TcpPort;
 
+    #[test]
+    fn test_tcp_port() {
+        println!("{:?}", TcpPort::from(2));
+    }
 }
 
 #[derive(Debug)]                // required for .unwrap()
@@ -196,65 +202,58 @@ fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {
     /* let's try to show an IP packet */
     let packet = p.data;
 
-    // println!("len: {}", packet.len());
     let net_and_transport = SlicedPacket::from_ethernet(&packet)?;
-    let src_addr;
-    let dest_addr;
-    let src_port;
-    let dest_port;
-    let protocol: &str;
+
+    let transport_proto: &str;
+    let app_proto : Port;
+    let addresses;
+    let ports;
+
     match net_and_transport.ip {
         Some(InternetSlice::Ipv4(ip, ..)) => {
-            src_addr = IpAddr::from(ip.source_addr());
-            dest_addr = IpAddr::from(ip.destination_addr());
-            // println!("\tsrc addr: {}", ip.source_addr());
-            // println!("\tdst addr: {}", ip.destination_addr());
+            addresses = Some((IpAddr::from(ip.source_addr()), IpAddr::from(ip.destination_addr())));
         },
         Some(InternetSlice::Ipv6(ip, ..)) => {
-            src_addr = IpAddr::from(ip.source_addr());
-            dest_addr = IpAddr::from(ip.destination_addr());
-            // println!("\tsrc addr: {}", ip.source_addr());
-            // println!("\tdst addr: {}", ip.destination_addr());
+            addresses = Some((IpAddr::from(ip.source_addr()), IpAddr::from(ip.destination_addr())));
         },
         _ => {
-            src_addr = IpAddr::from_str("0.0.0.0").unwrap(); // TODO: change!!
-            dest_addr = IpAddr::from_str("0.0.0.0").unwrap(); // TODO: change!!
-
+            addresses = None;
         }
     }
+
     match net_and_transport.transport {
         Some(TransportSlice::Udp(udp)) => {
-            src_port = udp.source_port();
-            dest_port = udp.destination_port();
-            protocol = "udp";
-            // println!("\t src port: {}", udp.source_port());
-            // println!("\t dst port: {}", udp.destination_port());
+            ports = Some((udp.source_port(), udp.destination_port()));
+            transport_proto = "udp";
+            app_proto = Udp(UdpPort::from(udp.source_port()))
         },
         Some(TransportSlice::Tcp(tcp)) => {
-            src_port = tcp.source_port();
-            dest_port = tcp.destination_port();
-            protocol = "tcp"
-            // println!("\t src port: {}", tcp.source_port());
-            // println!("\t dst port: {}", tcp.destination_port());
+            ports = Some((tcp.source_port(), tcp.destination_port()));
+            transport_proto = "tcp";
+            app_proto = Tcp(TcpPort::from(tcp.source_port()));
         },
         _ => {
-            src_port = 0; // TODO: change!!
-            dest_port = 0; // TODO: change!!
-            protocol = "unknown"
+            ports = None;
+            transport_proto = "unknown";
+            app_proto = Unknown;
         }
     }
 
-    let apacket = APMFPacket {
-        src_addr,
-        dest_addr,
-        src_port,
-        dest_port,
-        timestamp: ((p.header.ts.tv_sec as u128) << 64) + (p.header.ts.tv_usec as u128), // should mathematically be impossible to have overflow
-        n_bytes: p.header.len,
-        protocol
-    };
+    if addresses.is_some() && ports.is_some() {
+        let a_packet = APMFPacket {
+            src_addr : addresses.unwrap().0,
+            dest_addr : addresses.unwrap().1,
+            src_port : ports.unwrap().0,
+            dest_port : ports.unwrap().1,
+            timestamp: ((p.header.ts.tv_sec as u128) << 64) + (p.header.ts.tv_usec as u128), // should mathematically be impossible to have overflow
+            n_bytes: p.header.len,
+            protocol: transport_proto,
+            application : app_proto
+        };
 
-    println!("{:?}", apacket);
+        println!("{:?}", a_packet);
+    }
+
 
 
     Ok(())
@@ -268,7 +267,132 @@ struct APMFPacket {
     dest_port: u16,
     timestamp: u128, // nanoseconds
     n_bytes: u32,
-    protocol: &'static str
+    protocol: &'static str,
+    application: Port
 }
 
+mod ports {
+    use crate::ports::TcpPort::*;
 
+    #[derive(Debug)]
+    pub enum Port {
+        Tcp(TcpPort),
+        Udp(UdpPort),
+        Unknown
+    }
+
+    #[derive(Debug)]
+    pub enum TcpPort {
+        Echo,
+        FTPData,
+        FTPControl,
+        SSH,
+        DNS,
+        Telnet,
+        SMTP,
+        POP2,
+        POP3,
+        IMAP,
+        BGP,
+        IRC,
+        HTTPS,
+        SMTPS,
+        IKE,
+        DHCPv6Client,
+        DHCPv6Server,
+        Doom,
+        DNSOverTLS,
+        iSCSI,
+        FTPSData,
+        FTPSControl,
+        TelnetOverTLS,
+        IMAPS,
+        POP3S,
+        UnknownProtocol
+    }
+    /*
+     sed -E 's/\b(.)/\u\1/g' prova.txt | sed -E s/[[:blank:]]//g | sed  s/\\/Tcp/" => "/ | sed s/\\/Udp/" => "/
+    */
+    impl From<u16> for TcpPort {
+        fn from(p: u16) -> Self {
+            match p {
+                7 => Echo,
+                20 => FTPData,
+                21 => FTPControl,
+                22 => SSH,
+                23 => Telnet,
+                25 => SMTP,
+                53 => DNS,
+                109 => POP2,
+                110 => POP3,
+                143 => IMAP,
+                179 => BGP,
+                194 => IRC,
+                220 => IMAP,
+                443 => HTTPS,
+                465 => SMTPS,
+                500 => IKE,
+                546 => DHCPv6Client,
+                547 => DHCPv6Server,
+                587 => SMTP,
+                666 => Doom,
+                853 => DNSOverTLS,
+                860 => iSCSI,
+                989 => FTPSData,
+                990 => FTPSControl,
+                992 => TelnetOverTLS,
+                993 => IMAPS,
+                995 => POP3S,
+                _ => UnknownProtocol
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub enum UdpPort {
+        Echo,
+        DNS,
+        DHCP,
+        NTP,
+        SNMP,
+        IRC,
+        IMAP,
+        HTTPS,
+        RIP,
+        DHCPv6Client,
+        DHCPv6Server,
+        Doom,
+        DNSOverQUIC,
+        FTPSData,
+        FTPSControl,
+        TelnetOverTLS,
+        POP3S,
+        UnknownProtocol
+    }
+
+    impl From<u16> for UdpPort {
+        fn from(p: u16) -> Self {
+            match p {
+                7 => UdpPort::Echo,
+                53 => UdpPort::DNS,
+                67 => UdpPort::DHCP,
+                68 => UdpPort::DHCP,
+                123 => UdpPort::NTP,
+                161 => UdpPort::SNMP,
+                194 => UdpPort::IRC,
+                220 => UdpPort::IMAP,
+                443 => UdpPort::HTTPS,
+                520 => UdpPort::RIP,
+                546 => UdpPort::DHCPv6Client,
+                547 => UdpPort::DHCPv6Server,
+                666 => UdpPort::Doom,
+                853 => UdpPort::DNSOverQUIC,
+                989 => UdpPort::FTPSData,
+                990 => UdpPort::FTPSControl,
+                992 => UdpPort::TelnetOverTLS,
+                995 => UdpPort::POP3S,
+                _ => UdpPort::UnknownProtocol
+            }
+        }
+    }
+}
