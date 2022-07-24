@@ -192,9 +192,12 @@ pub fn init(dev_name : &str) -> Result<APMFSniffer, Error> {
     Err(NoSuchDevice)
 }
 
+/// Returns a vector containing strings that describe devices available in the format `name: description`
+/// # Errors
+/// * [`RustPcapError`] if [`Device::list()`] fails.
 pub fn list_devices() -> Result<Vec<String>, Error> {
     let list = Device::list()?;      // can return MalformedError, PcapError, InvalidString
-    return Ok(list.into_iter().map(|d| d.name).collect());
+    return Ok(list.into_iter().map(|d| format!("{}: {}", d.name, d.desc.unwrap_or("no description".to_string()))).collect());
 }
 
 fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {

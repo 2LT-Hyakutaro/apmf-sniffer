@@ -42,7 +42,7 @@ fn main() {
                 println!("Could not get list of available devices: Error {:?}", list.err().unwrap());
                 return;
             }
-            println!("{:?}", list.unwrap());
+            list.unwrap().into_iter().for_each(|d| println!("{}", d));
             return;
         },
         Args{ list: false, capture: true, dev_name:Some(dev), filter: f, file_name: Some(file_name), time: Some(delta_t)  } => {
