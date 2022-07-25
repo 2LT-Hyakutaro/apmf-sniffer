@@ -1,10 +1,10 @@
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Display, Formatter};
 use std::net::IpAddr;
 use crate::{APMFPacket, Port};
 
-struct Report {
+pub struct Report {
     report: HashMap<ReportHeader, ReportInfo>,
 }
 
@@ -36,7 +36,7 @@ impl Report {
             info.start_time = min(info.start_time, p.timestamp);
             info.stop_time = max(info.stop_time, p.timestamp);
             info.n_bytes += p.n_bytes;
-            info.trans_protocols.push(p.protocol);
+            info.trans_protocols.insert(p.protocol);
             info.app_protocols.push(p.application);
         }
         else {
@@ -55,7 +55,7 @@ impl Display for Report {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "src address\tsrc port\tdest address\tdest port\ttime first packet\ttime last packet\tnumber of bytes\ttransport protocol\tapplication protocol\n")?;
         for (header, info) in self.report.iter() {
-            let trans_p = info.trans_protocols.iter().collect::<Vec<&str>>().join(", ");
+            let trans_p = info.trans_protocols.iter().map(|s| s.to_owned()).collect::<Vec<&str>>().join(", ");
             let app_p = info.app_protocols.iter().map(|p| format!("{:?}", p)).collect::<Vec<String>>().join(", ");
             write!(f, "{}\t{}\t{}\t{}\t", header.src_addr, header.src_port, header.dest_addr, header.dest_port)?;
             write!(f, "{}\t{}\t{}\t{}\t{}\n", info.start_time, info.stop_time, info.n_bytes, trans_p, app_p)?;
