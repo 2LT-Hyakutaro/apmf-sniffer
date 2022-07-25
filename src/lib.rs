@@ -1,6 +1,7 @@
 use std::net::IpAddr;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread;
+use std::time::Duration;
 use etherparse::{InternetSlice, ReadError, SlicedPacket, TransportSlice};
 use pcap::{Capture, Device, Active, Inactive};
 use crate::Error::*;
@@ -66,14 +67,15 @@ pub struct APMFSniffer {
     pub device : Device,
     pub capture : Option<Capture<Active>>,
     pub status : Status,
+    pub interval : Duration,
     pub output : String,            // will need to be changed
     sender: Option<Sender<Command>>
 }
 
 impl APMFSniffer {
 
-    fn new(device : Device, status : Status, output : String) -> Self {
-        APMFSniffer{device, capture : None, status, output, sender: None}
+    fn new(device : Device, status : Status, interval : Duration, output : String) -> Self {
+        APMFSniffer{device, capture : None, status, interval, output, sender: None}
     }
 
     /// # Errors
@@ -179,13 +181,14 @@ impl Drop for APMFSniffer {
 /// # Errors
 /// * [`RustPcapError`] if [`Device::list()`] fails.
 /// * [`NoSuchDevice`] if the provided name does not match any device name.
-pub fn init(dev_name : &str) -> Result<APMFSniffer, Error> {
+pub fn init(dev_name : &str, millis : u64) -> Result<APMFSniffer, Error> {
 
     let list = Device::list()?;        // can return MalformedError, PcapError, InvalidString
 
     for dev in list {
         if dev.name == dev_name {
-            return Ok(APMFSniffer::new(dev, Initialized, "stdout?".to_string()))
+            let duration = Duration::from_millis(millis);
+            return Ok(APMFSniffer::new(dev, Initialized, duration, "stdout?".to_string()))
         }
     }
 
