@@ -253,7 +253,7 @@ fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {
             dest_addr : addresses.unwrap().1,
             src_port : ports.unwrap().0,
             dest_port : ports.unwrap().1,
-            timestamp: ((p.header.ts.tv_sec as u128) << 64) + (p.header.ts.tv_usec as u128), // should mathematically be impossible to have overflow
+            timestamp: ((p.header.ts.tv_sec as u128) * 1000000000) + (p.header.ts.tv_usec as u128), // should mathematically be impossible to have overflow
             n_bytes: p.header.len,
             protocol: transport_proto,
             application : app_proto
@@ -268,12 +268,12 @@ fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {
 }
 
 #[derive(Debug)]
-struct APMFPacket {
+pub struct APMFPacket {
     src_addr: IpAddr,
     dest_addr: IpAddr,
     src_port: u16,
     dest_port: u16,
-    timestamp: u128, // nanoseconds
+    timestamp: u128, // nanoseconds in unix epoch
     n_bytes: u32,
     protocol: &'static str,
     application: Port
