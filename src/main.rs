@@ -25,9 +25,9 @@ struct Args {
     #[clap(short, long, value_parser)]
     file_name: Option<String>,
 
-    /// Time after which a new report is generated in seconds
+    /// Time (in milliseconds) after which a new report is generated in seconds
     #[clap(short, long, value_parser)]
-    time: Option<u32>,
+    time: Option<u64>,
 }
 
 fn main() {
@@ -47,7 +47,7 @@ fn main() {
         },
         Args{ list: false, capture: true, dev_name:Some(dev), filter: f, file_name: Some(file_name), time: Some(delta_t)  } => {
             // TODO: use file_name and delta_t
-            let d = init(dev.as_str());
+            let d = init(dev.as_str(), delta_t);
             if d.is_err() {
                 println!("Could not initialize device {}: Error {:?}", dev, d.err().unwrap());
                 return;
