@@ -30,7 +30,8 @@ pub enum Error {
     FilterError(String),
     ParsingError(etherparse::ReadError),
     DisconnectedThread,
-    InternalError
+    InternalError,
+    PacketNotRecognized
 }
 
 impl From<pcap::Error> for Error {
@@ -170,9 +171,9 @@ impl APMFSniffer {
                 };
 
                 /* parse packet */
-                // let apmf_packet =
-                match parse_packet(packet) {
+                let apmf_packet = match parse_packet(packet) {
                     Ok(p) => p,
+                    Err(PacketNotRecognized) => continue,
                     _ => break,
                 };
 
@@ -245,7 +246,7 @@ pub fn list_devices() -> Result<Vec<String>, Error> {
     return Ok(list.into_iter().map(|d| format!("{}: {}", d.name, d.desc.unwrap_or("no description".to_string()))).collect());
 }
 
-fn parse_packet(p : pcap::Packet) -> Result<(), Error> {
+fn parse_packet(p : pcap::Packet) -> Result<APMFPacket, Error> {
 
     let net_and_transport = SlicedPacket::from_ethernet(p.data)?;
 
@@ -284,7 +285,7 @@ fn parse_packet(p : pcap::Packet) -> Result<(), Error> {
         }
     }
 
-    if addresses.is_some() && ports.is_some() {
+    return if addresses.is_some() && ports.is_some() {
         let a_packet = APMFPacket {
             src_addr : addresses.unwrap().0,
             dest_addr : addresses.unwrap().1,
@@ -297,9 +298,10 @@ fn parse_packet(p : pcap::Packet) -> Result<(), Error> {
         };
 
         println!("{:?}", a_packet);
+        Ok(a_packet)
+    } else {
+     Err(PacketNotRecognized)
     }
-
-    Ok(())
 }
 
 #[derive(Debug)]
