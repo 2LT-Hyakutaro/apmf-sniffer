@@ -1,9 +1,10 @@
 use std::net::IpAddr;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use etherparse::{InternetSlice, ReadError, SlicedPacket, TransportSlice};
 use pcap::{Capture, Device, Active, Inactive};
+use pcap::Error::TimeoutExpired;
 use crate::Error::*;
 use crate::Port::{Tcp, Udp, Unknown};
 use crate::ports::{Port, TcpPort, UdpPort};
@@ -67,14 +68,14 @@ pub struct APMFSniffer {
     pub device : Device,
     pub capture : Option<Capture<Active>>,
     pub status : Status,
-    pub interval : Duration,
+    pub interval : u64,
     pub output : String,            // will need to be changed
     sender: Option<Sender<Command>>
 }
 
 impl APMFSniffer {
 
-    fn new(device : Device, status : Status, interval : Duration, output : String) -> Self {
+    fn new(device : Device, status : Status, interval : u64, output : String) -> Self {
         APMFSniffer{device, capture : None, status, interval, output, sender: None}
     }
 
@@ -90,7 +91,7 @@ impl APMFSniffer {
         let res_cap = Capture::from_device(self.device.name.as_str())?;
         let active_cap = self.activate_capture(res_cap, f)?;
         self.status = Sniffing;
-        self.start_capture_thread(active_cap);
+        self.start_capture_thread(active_cap, self.interval);
 
         Ok(())
     }
@@ -127,20 +128,57 @@ impl APMFSniffer {
 
     fn activate_capture(&self, cap: Capture<Inactive>, filter : &str) -> Result<Capture<Active>, Error> {
         let mut capture = cap.promisc(true)
-            .immediate_mode(true)               // packets are picked up immediately (no buffering)
-            //cap.rfmon(true);                                      // might be important for wlan
-            .open()?;
+            .immediate_mode(false)               // packets are picked up immediately (no buffering)
+            .open()?
+            .setnonblock()?;
 
         capture.filter(filter, false)?;
 
         Ok(capture)
     }
 
-    fn start_capture_thread(&mut self, mut cap: Capture<Active>) {
+    fn start_capture_thread(&mut self, mut cap: Capture<Active>, interval : u64) {
         let (sender, receiver): (Sender<Command>, Receiver<Command>) = channel();
         self.sender = Some(sender);
         thread::spawn(move || {
-            while gib_test(&mut cap).is_ok() { // this should make the thread automatically stop if the sender disconnects
+
+            let mut last_report = Instant::now();
+            let mut n = 0;
+
+
+            // this should make the thread automatically stop if the sender disconnects
+
+            loop {
+                /* check timer */
+                let now = Instant::now();
+                if now - last_report > Duration::from_millis(interval) {
+                    n += 1;
+                    last_report = now;
+                    // TODO: start a thread that produces the report
+                    let stats = match cap.stats() {
+                        Ok(s) => s,
+                        _ => break,
+                    };
+                    println!("REPORT #{}: {:#?}", n, stats);
+                }
+
+                /* get packet */
+                let packet = match cap.next() {
+                    Ok(p) => p,
+                    Err(TimeoutExpired) => continue,
+                    _ => break,
+                };
+
+                /* parse packet */
+                // let apmf_packet =
+                match parse_packet(packet) {
+                    Ok(p) => p,
+                    _ => break,
+                };
+
+                /* save packet */
+
+
                 let res = receiver.try_recv();
                 if res.is_err() {
                     if res.err().unwrap() == TryRecvError::Empty {
@@ -158,7 +196,12 @@ impl APMFSniffer {
                         Command::Resume => break
                     }
                 }
+
             }
+
+            // TODO: what if we get here?
+            // we could get here if
+            println!("Capturing thread exited!!!");
         });
     }
 }
@@ -187,8 +230,7 @@ pub fn init(dev_name : &str, millis : u64) -> Result<APMFSniffer, Error> {
 
     for dev in list {
         if dev.name == dev_name {
-            let duration = Duration::from_millis(millis);
-            return Ok(APMFSniffer::new(dev, Initialized, duration, "stdout?".to_string()))
+            return Ok(APMFSniffer::new(dev, Initialized, millis, "stdout?".to_string()))
         }
     }
 
@@ -203,14 +245,9 @@ pub fn list_devices() -> Result<Vec<String>, Error> {
     return Ok(list.into_iter().map(|d| format!("{}: {}", d.name, d.desc.unwrap_or("no description".to_string()))).collect());
 }
 
-fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {
+fn parse_packet(p : pcap::Packet) -> Result<(), Error> {
 
-    let p = cap.next()?;
-
-    /* let's try to show an IP packet */
-    let packet = p.data;
-
-    let net_and_transport = SlicedPacket::from_ethernet(&packet)?;
+    let net_and_transport = SlicedPacket::from_ethernet(p.data)?;
 
     let transport_proto: &str;
     let app_proto : Port;
@@ -262,8 +299,6 @@ fn gib_test(cap: &mut Capture<Active>) -> Result<(), Error> {
         println!("{:?}", a_packet);
     }
 
-
-
     Ok(())
 }
 
@@ -310,7 +345,7 @@ mod ports {
         DHCPv6Server,
         Doom,
         DNSOverTLS,
-        iSCSI,
+        ISCSI,
         FTPSData,
         FTPSControl,
         TelnetOverTLS,
@@ -345,7 +380,7 @@ mod ports {
                 587 => SMTP,
                 666 => Doom,
                 853 => DNSOverTLS,
-                860 => iSCSI,
+                860 => ISCSI,
                 989 => FTPSData,
                 990 => FTPSControl,
                 992 => TelnetOverTLS,
