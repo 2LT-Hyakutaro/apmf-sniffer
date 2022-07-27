@@ -1,6 +1,8 @@
+extern crate core;
+
 use std::net::IpAddr;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
-use std::thread;
+use std::{fs, thread};
 use std::time::{Duration, Instant};
 use etherparse::{InternetSlice, ReadError, SlicedPacket, TransportSlice};
 use pcap::{Capture, Device, Active, Inactive};
@@ -104,10 +106,9 @@ impl APMFSniffer {
         }
         let res = self.sender.as_ref().unwrap().send(Command::Resume);
         if res.is_err() {
-            // TODO: decide what happens in this case, the receiver is disconnected,
-            // should a new thread be started or should we return an error?
             return Err(DisconnectedThread);
         }
+        self.status = Sniffing;
 
 
         Ok(())
@@ -119,7 +120,7 @@ impl APMFSniffer {
             self.status = Paused;
             let res = self.sender.as_ref().unwrap().send(Command::Pause);
             if res.is_err() {
-                return Err(Error::DisconnectedThread) // maybe change to not generic error depending on the error?
+                return Err(Error::DisconnectedThread)
             }
             Ok(())
         } else {
@@ -141,10 +142,12 @@ impl APMFSniffer {
     fn start_capture_thread(&mut self, mut cap: Capture<Active>, interval : u64) {
         let (sender, receiver): (Sender<Command>, Receiver<Command>) = channel();
         self.sender = Some(sender);
+        let file_name = self.output.clone();
         thread::spawn(move || {
 
             let mut last_report = Instant::now();
             let mut n = 0;
+            let mut packets = vec![];
 
 
             // this should make the thread automatically stop if the sender disconnects
@@ -155,7 +158,16 @@ impl APMFSniffer {
                 if now - last_report > Duration::from_millis(interval) {
                     n += 1;
                     last_report = now;
-                    // TODO: start a thread that produces the report
+                    let file_name_copy = file_name.clone();
+                    thread::spawn(move || {
+                        let r = report::generate_report(packets.to_vec());
+                        if fs::write(file_name_copy, format!("{}", r)).is_err() {
+                            //TODO: change this to send an error, the error should terminate all threads
+                            panic!("Error writing report")
+                        }
+                        //println!("{}", r);
+                    });
+                    packets = vec![];
                     let stats = match cap.stats() {
                         Ok(s) => s,
                         _ => break,
@@ -178,7 +190,7 @@ impl APMFSniffer {
                 };
 
                 /* save packet */
-
+                packets.push(apmf_packet);
 
                 let res = receiver.try_recv();
                 if res.is_err() {
@@ -188,13 +200,17 @@ impl APMFSniffer {
                     return;
                 }
                 let mut command = res.unwrap();
+                let curr_time_elapsed = Instant::now() - last_report;
                 loop {
                     match command {
                         Command::Stop => return,
                         Command::Pause => {
                             command = receiver.recv().unwrap();
                         }
-                        Command::Resume => break
+                        Command::Resume => {
+                            last_report = Instant::now() - curr_time_elapsed;
+                            break
+                        }
                     }
                 }
 
@@ -225,13 +241,13 @@ impl Drop for APMFSniffer {
 /// # Errors
 /// * [`RustPcapError`] if [`Device::list()`] fails.
 /// * [`NoSuchDevice`] if the provided name does not match any device name.
-pub fn init(dev_name : &str, millis : u64) -> Result<APMFSniffer, Error> {
+pub fn init(dev_name : &str, millis : u64, file_name: String) -> Result<APMFSniffer, Error> {
 
     let list = Device::list()?;        // can return MalformedError, PcapError, InvalidString
 
     for dev in list {
         if dev.name == dev_name {
-            return Ok(APMFSniffer::new(dev, Initialized, millis, "stdout?".to_string()))
+            return Ok(APMFSniffer::new(dev, Initialized, millis, file_name))
         }
     }
 
@@ -291,42 +307,55 @@ fn parse_packet(p : pcap::Packet) -> Result<APMFPacket, Error> {
             dest_addr : addresses.unwrap().1,
             src_port : ports.unwrap().0,
             dest_port : ports.unwrap().1,
-            timestamp: ((p.header.ts.tv_sec as u128) * 1000000000) + (p.header.ts.tv_usec as u128), // should mathematically be impossible to have overflow
+            timestamp: (p.header.ts.tv_sec as i64, p.header.ts.tv_usec as u32),
             n_bytes: p.header.len,
             protocol: transport_proto,
             application : app_proto
         };
 
-        println!("{:?}", a_packet);
+        //println!("{:?}", a_packet);
         Ok(a_packet)
     } else {
      Err(PacketNotRecognized)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct APMFPacket {
     src_addr: IpAddr,
     dest_addr: IpAddr,
     src_port: u16,
     dest_port: u16,
-    timestamp: u128, // nanoseconds in unix epoch
+    timestamp: (i64, u32), // (seconds, nanoseconds) from unix epoch
     n_bytes: u32,
     protocol: &'static str,
     application: Port
 }
 
 mod ports {
+    use std::fmt::{Display, Formatter};
     use crate::ports::TcpPort::*;
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum Port {
         Tcp(TcpPort),
         Udp(UdpPort),
         Unknown
     }
 
-    #[derive(Debug)]
+    impl Display for Port {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self{
+                Self::Tcp(port) => write!(f, "{:?}", port)?,
+                Self::Udp(port) => write!(f, "{:?}", port)?,
+                Self::Unknown => write!(f, "Unknown")?
+            };
+
+            Ok(())
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum TcpPort {
         Echo,
         FTPData,
@@ -393,7 +422,7 @@ mod ports {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum UdpPort {
         Echo,
         DNS,

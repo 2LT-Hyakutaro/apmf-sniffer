@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::net::IpAddr;
 use crate::{APMFPacket, Port};
+use chrono::NaiveDateTime;
 
 pub struct Report {
     report: HashMap<ReportHeader, ReportInfo>,
@@ -16,11 +17,11 @@ struct ReportHeader {
     dest_port: u16,
 }
 struct ReportInfo {
-    start_time: u128,
-    stop_time: u128,
+    start_time: (i64, u32),
+    stop_time: (i64, u32),
     n_bytes: u32,
     trans_protocols: HashSet<&'static str>,
-    app_protocols: Vec<Port> // need to change to HashSet as well (as we currently get the protocol, the protocol will be just one)
+    app_protocols: HashSet<Port> // need to change to HashSet as well (as we currently get the protocol, the protocol will be just one)
 }
 
 impl Report {
@@ -37,7 +38,7 @@ impl Report {
             info.stop_time = max(info.stop_time, p.timestamp);
             info.n_bytes += p.n_bytes;
             info.trans_protocols.insert(p.protocol);
-            info.app_protocols.push(p.application);
+            info.app_protocols.insert(p.application);
         }
         else {
             self.report.insert(p_header, ReportInfo{
@@ -45,7 +46,7 @@ impl Report {
                 stop_time: p.timestamp,
                 n_bytes: p.n_bytes,
                 trans_protocols: HashSet::from([p.protocol]),
-                app_protocols: vec![p.application]
+                app_protocols: HashSet::from([p.application])
             });
         }
     }
@@ -53,12 +54,14 @@ impl Report {
 
 impl Display for Report {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "src address\tsrc port\tdest address\tdest port\ttime first packet\ttime last packet\tnumber of bytes\ttransport protocol\tapplication protocol\n")?;
+        write!(f, "src address,src port,dest address,dest port,time first packet,time last packet,number of bytes,transport protocol,application protocol\n")?;
         for (header, info) in self.report.iter() {
             let trans_p = info.trans_protocols.iter().map(|s| s.to_owned()).collect::<Vec<&str>>().join(", ");
-            let app_p = info.app_protocols.iter().map(|p| format!("{:?}", p)).collect::<Vec<String>>().join(", ");
-            write!(f, "{}\t{}\t{}\t{}\t", header.src_addr, header.src_port, header.dest_addr, header.dest_port)?;
-            write!(f, "{}\t{}\t{}\t{}\t{}\n", info.start_time, info.stop_time, info.n_bytes, trans_p, app_p)?;
+            let app_p = info.app_protocols.iter().map(|p| format!("{}", p)).collect::<Vec<String>>().join(", ");
+            let start_time = NaiveDateTime::from_timestamp(info.start_time.0, info.start_time.1).format("%Y-%m-%d %H:%M:%S.%f").to_string();
+            let stop_time = NaiveDateTime::from_timestamp(info.stop_time.0, info.stop_time.1).format("%Y-%m-%d %H:%M:%S.%f").to_string();
+            write!(f, "{},{},{},{},", header.src_addr, header.src_port, header.dest_addr, header.dest_port)?;
+            write!(f, "{},{},{},{},{}\n", start_time, stop_time, info.n_bytes, trans_p, app_p)?;
         }
 
         Ok(())

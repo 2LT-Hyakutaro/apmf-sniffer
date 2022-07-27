@@ -47,7 +47,7 @@ fn main() {
         },
         Args{ list: false, capture: true, dev_name:Some(dev), filter: f, file_name: Some(file_name), time: Some(delta_t)  } => {
             // TODO: use file_name and delta_t
-            let d = init(dev.as_str(), delta_t);
+            let d = init(dev.as_str(), delta_t, file_name);
             if d.is_err() {
                 println!("Could not initialize device {}: Error {:?}", dev, d.err().unwrap());
                 return;
@@ -84,11 +84,51 @@ fn main() {
         }
     }
 
+    println!("Commands available:");
+    println!("pause - Pauses the capture process");
+    println!("resume - Resumes the capture process (if pressed when the capture is not paused gives an error)");
+    println!("force_exit - Terminates the process, same as Ctrl+C");
+
     loop{
         let line = std::io::stdin().lines().next().unwrap().unwrap();
         match line.as_str() {
-            "pause" => device.pause().unwrap(),
-            "resume" => device.resume().unwrap(),
+            "pause" => {
+                let res = device.pause();
+                if res.is_err() {
+                    match res.err().unwrap() {
+                        Error::IllegalAction => println!("Cannot pause, sniffing not active"),
+                        Error::DisconnectedThread => {
+                            println!("Capture thread failed, quitting process");
+                            return
+                        },
+                        _ => {
+                            println!("Unexpected error");
+                            return
+                        }
+                    }
+                }
+
+            },
+            "resume" => {
+                let res = device.resume();
+                if res.is_err() {
+                    match res.err().unwrap() {
+                        Error::IllegalAction => println!("Cannot pause, sniffing not active"),
+                        Error::DisconnectedThread => {
+                            println!("Capture thread failed, quitting process");
+                            return
+                        },
+                        Error::InternalError => {
+                            println!("Library internal error, quitting process");
+                            return
+                        },
+                        _ => {
+                            println!("Unexpected error");
+                            return
+                        }
+                    }
+                }
+            },
             "force_exit" => {
                 drop(device);
                 return
