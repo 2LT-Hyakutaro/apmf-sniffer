@@ -60,7 +60,7 @@ fn main() {
                 println!("Could not start capture on device {}: Error {:?}", dev, res.err().unwrap());
                 return;
             }
-            println!("Started capture on dev {}", dev)
+            println!("Started capture on dev {}", dev);
         },
         Args{ list: false, capture: true, dev_name:None, filter: _, file_name: _, time: _  } => {
             println!("Error: Supply a device name");
@@ -85,14 +85,16 @@ fn main() {
     }
 
     println!("Commands available:");
-    println!("pause - Pauses the capture process");
-    println!("resume - Resumes the capture process (if pressed when the capture is not paused gives an error)");
-    println!("force_exit - Terminates the process, same as Ctrl+C");
+    println!("p - Pauses the capture process");
+    println!("r - Resumes the capture process");
+    println!("exit - Terminates the process, same as Ctrl+C");
+
+    println!("Capturing packets... ");
 
     loop{
         let line = std::io::stdin().lines().next().unwrap().unwrap();
         match line.as_str() {
-            "pause" => {
+            "p" => {
                 let res = device.pause();
                 if res.is_err() {
                     match res.err().unwrap() {
@@ -109,11 +111,11 @@ fn main() {
                 }
 
             },
-            "resume" => {
+            "r" => {
                 let res = device.resume();
                 if res.is_err() {
                     match res.err().unwrap() {
-                        Error::IllegalAction => println!("Cannot pause, sniffing not active"),
+                        Error::IllegalAction => println!("Sniffing already active"),
                         Error::DisconnectedThread => {
                             println!("Capture thread failed, quitting process");
                             return
@@ -129,7 +131,7 @@ fn main() {
                     }
                 }
             },
-            "force_exit" => {
+            "exit" => {
                 drop(device);
                 return
             },

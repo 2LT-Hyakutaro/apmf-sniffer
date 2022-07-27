@@ -110,6 +110,7 @@ impl APMFSniffer {
         }
         self.status = Sniffing;
 
+        println!("Capturing packets... ");
 
         Ok(())
     }
@@ -122,6 +123,7 @@ impl APMFSniffer {
             if res.is_err() {
                 return Err(Error::DisconnectedThread)
             }
+            println!("Capture paused");
             Ok(())
         } else {
             Err(IllegalAction)
@@ -172,7 +174,8 @@ impl APMFSniffer {
                         Ok(s) => s,
                         _ => break,
                     };
-                    println!("REPORT #{}: {:#?}", n, stats);
+                    println!("REPORT #{} finished: {:#?}", n, stats);
+                    println!("Capturing packets... ");
                 }
 
                 /* get packet */
