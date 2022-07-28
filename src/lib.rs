@@ -30,7 +30,7 @@ pub enum Error {
     IllegalAction,              /* returned when a method is called when in the wrong state (e.g. start() when already active) */
     RustPcapError(pcap::Error),
     FilterError(String),
-    ParsingError(etherparse::ReadError),
+    ParsingError(ReadError),
     DisconnectedThread,
     InternalError,
     PacketNotRecognized
@@ -82,6 +82,9 @@ impl APMFSniffer {
         APMFSniffer{device, capture : None, status, interval, output, sender: None}
     }
 
+    /// Starts the capture on the APMFSniffer with the specified filter in BFP format.
+    /// If the filter is a empty string, it uses the default filter, which captures all
+    /// tcp and udp packets
     /// # Errors
     /// * `RustPcapError` if o capture cannot be activated on the device (e.g. because the interface is down)
     /// * `FilterError` if the BPF string provided was incorrect.
@@ -99,6 +102,11 @@ impl APMFSniffer {
         Ok(())
     }
 
+    /// Resumes the capture process following a call to the `pause` function
+    /// # Errors
+    /// * `IllegalAction` if the capture is not currently in the pause state (e.g. it is currently active)
+    /// * `InternalError` should never happen, it indicates a bug with the library
+    /// * `DisconnectedThread` if the capture thread disconnected, the capture cannot be resumed
     pub fn resume(&mut self) -> Result<(), Error> {
         if self.status != Paused { return Err(IllegalAction); }
         if self.sender.is_none() {
@@ -115,13 +123,18 @@ impl APMFSniffer {
         Ok(())
     }
 
-
+    /// Pauses the capture process: between the call of this function and `resume` the time to the
+    /// next report does not progress (i.e no new report will be generated while in pause)
+    /// # Errors
+    /// * `IllegalAction` if the capture is not currently in the pause state (e.g. it is currently active)
+    /// * `InternalError` should never happen, it indicates a bug with the library
+    /// * `DisconnectedThread` if the capture thread disconnected, the capture cannot be resumed
     pub fn pause(&mut self) -> Result<(), Error> {
         return if self.status == Sniffing {
             self.status = Paused;
             let res = self.sender.as_ref().unwrap().send(Command::Pause);
             if res.is_err() {
-                return Err(Error::DisconnectedThread)
+                return Err(DisconnectedThread)
             }
             println!("Capture paused");
             Ok(())

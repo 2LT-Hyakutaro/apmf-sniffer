@@ -68,6 +68,8 @@ impl Display for Report {
     }
 }
 
+/// Generates a report from a collection of APMFPackets. The report contains packets statistics
+/// aggregated by source address and port and destination address and port
 pub fn generate_report(packets: Vec<APMFPacket>) -> Report {
     let mut report = Report {
         report: HashMap::new()
