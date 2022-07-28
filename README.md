@@ -31,11 +31,11 @@ Only some of this error are returned by public functions, others are used only i
 
 ## How to use
 To use the library, create a `APMFSniffer` and use the functions `start`, `pause` and `resume` to control the sniffing process. \
-```[rust]
+```rust
 fn main() {
     let dev_name = "dev1";
     let delta_t = 10000; // milliseconds
-    let file_name = "/home/report.csv"
+    let file_name = "/home/report.csv";
     let device = init(dev.as_str(), delta_t, file_name).unwrap();
     device.start().unwrap(); // starts capture
 }
