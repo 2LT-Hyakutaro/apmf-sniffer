@@ -54,7 +54,7 @@ impl Report {
 
 impl Display for Report {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "src address,src port,dest address,dest port,time first packet,time last packet,number of bytes,transport protocol,application protocol\n")?;
+        write!(f, "src IP | src port | dest IP | dest port | time first packet | time last packet | number of bytes | transport protocol | application protocol\n")?;
         for (header, info) in self.report.iter() {
             let trans_p = info.trans_protocols.iter().map(|s| s.to_owned()).collect::<Vec<&str>>().join(", ");
             let app_p = info.app_protocols.iter().map(|p| format!("{}", p)).collect::<Vec<String>>().join(", ");
