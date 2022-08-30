@@ -11,6 +11,7 @@ use crate::Error::*;
 use crate::Port::{Tcp, Udp, Unknown};
 use crate::ports::{Port, TcpPort, UdpPort};
 use crate::Status::{Sniffing, Initialized, Paused};
+use crate::UdpPort::UnknownProtocol;
 
 mod report;
 
@@ -283,7 +284,7 @@ fn parse_packet(p : pcap::Packet) -> Result<APMFPacket, Error> {
     let net_and_transport = SlicedPacket::from_ethernet(p.data)?;
 
     let transport_proto: &str;
-    let app_proto : Port;
+    let mut app_proto : Port;
     let addresses;
     let ports;
 
@@ -303,12 +304,18 @@ fn parse_packet(p : pcap::Packet) -> Result<APMFPacket, Error> {
         Some(TransportSlice::Udp(udp)) => {
             ports = Some((udp.source_port(), udp.destination_port()));
             transport_proto = "udp";
-            app_proto = Udp(UdpPort::from(udp.source_port()))
+            app_proto = Udp(UdpPort::from(udp.source_port()));
+            if app_proto == Udp(UnknownProtocol) {
+                app_proto = Udp(UdpPort::from(udp.destination_port()))
+            }
         },
         Some(TransportSlice::Tcp(tcp)) => {
             ports = Some((tcp.source_port(), tcp.destination_port()));
             transport_proto = "tcp";
             app_proto = Tcp(TcpPort::from(tcp.source_port()));
+            if app_proto == Tcp(TcpPort::UnknownProtocol) {
+                app_proto = Tcp(TcpPort::from(tcp.destination_port()))
+            }
         },
         _ => {
             ports = None;
@@ -378,6 +385,7 @@ mod ports {
         FTPControl,
         SSH,
         DNS,
+        HTTP,
         Telnet,
         SMTP,
         POP2,
@@ -413,6 +421,7 @@ mod ports {
                 23 => Telnet,
                 25 => SMTP,
                 53 => DNS,
+                80 => HTTP,
                 109 => POP2,
                 110 => POP3,
                 143 => IMAP,

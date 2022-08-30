@@ -54,14 +54,14 @@ impl Report {
 
 impl Display for Report {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "src IP | src port | dest IP | dest port | time first packet | time last packet | number of bytes | transport protocol | application protocol\n")?;
+        write!(f, "src IP address\t| port\t|  dest IP address\t| port\t| timestamp first packet\t| timestamp last packet  \t|     bytes\t| transport \t| application \n")?;
         for (header, info) in self.report.iter() {
             let trans_p = info.trans_protocols.iter().map(|s| s.to_owned()).collect::<Vec<&str>>().join(", ");
             let app_p = info.app_protocols.iter().map(|p| format!("{}", p)).collect::<Vec<String>>().join(", ");
             let start_time = NaiveDateTime::from_timestamp(info.start_time.0, info.start_time.1).format("%Y-%m-%d %H:%M:%S.%f").to_string();
             let stop_time = NaiveDateTime::from_timestamp(info.stop_time.0, info.stop_time.1).format("%Y-%m-%d %H:%M:%S.%f").to_string();
-            write!(f, "{},{},{},{},", header.src_addr, header.src_port, header.dest_addr, header.dest_port)?;
-            write!(f, "{},{},{},{},{}\n", start_time, stop_time, info.n_bytes, trans_p, app_p)?;
+            write!(f, "{}\t| {}\t|      {}\t| {}\t| ", header.src_addr, header.src_port, header.dest_addr, header.dest_port)?;
+            write!(f, "{}\t| {}\t|     {}\t|    {}\t| {}\n", start_time, stop_time, info.n_bytes, trans_p, app_p)?;
         }
 
         Ok(())
